@@ -2,7 +2,7 @@
 
 # AIBot・会理解任务的 Minecraft 智能玩家
 
-**一句自然语言 → 云端 Laya 分类 → 分层 Skill 文档 → StepFun 领域决策 → 游戏内确定性执行**
+**一句自然语言 → 云端 StepFun 分类 → 分层 Skill 文档 → StepFun 领域决策 → 游戏内确定性执行**
 
 从「为我搭一栋日式建筑」到一座真实落成的房子，中间每一步都可检查、可追溯。
 
@@ -10,7 +10,7 @@
 
 ![Minecraft 1.21.3](https://img.shields.io/badge/Minecraft-1.21.3-62B47A?style=flat-square)
 
-`Minecraft 1.21.3` · `Fabric` · `Java 21` · `Laya（开源）` · `StepFun 阶跃星辰` · `Agent Skills`
+`Minecraft 1.21.3` · `Fabric` · `Java 21` · `StepFun（开源）` · `StepFun 阶跃星辰` · `Agent Skills`
 
 
 
@@ -24,7 +24,7 @@ AIBot 是一个面向 Minecraft 1.21.3 的 Fabric 客户端模组。它在游戏
 
 
 
-* **Laya（开源模型）** 部署在 **DGX Spark 平台提供的云算力节点服务器**上，通过对外开放的推理端口调用，负责第一层快速、轻量的**意图分类**；
+* **StepFun（开源模型）** 部署在 **DGX Spark 平台提供的云算力节点服务器**上，通过对外开放的推理端口调用，负责第一层快速、轻量的**意图分类**；
 
 * 分类确定后，系统先查询一份**总 Skill 索引**，再定位到对应的**具体 Skill 文档**（运动 / 建筑 / 指令）；
 
@@ -44,7 +44,7 @@ AIBot 是一个面向 Minecraft 1.21.3 的 Fabric 客户端模组。它在游戏
 
 
 
-* **双模型分层，各司其职**：小模型 Laya 做毫秒级意图分类，大模型 StepFun 只在确定领域内做决策，兼顾速度、成本与准确性。
+* **双模型分层，各司其职**：小模型 StepFun 做毫秒级意图分类，大模型 StepFun 只在确定领域内做决策，兼顾速度、成本与准确性。
 
 * **文档即能力（Documentation-as-Capability）**：运动、建筑、指令的规则写成 Markdown Skill，新增能力主要靠新增 / 改写文档，而不是改代码、重训模型。
 
@@ -66,7 +66,7 @@ AIBot 是一个面向 Minecraft 1.21.3 的 Fabric 客户端模组。它在游戏
 
 ```mermaid
 flowchart LR
-    U["玩家自然语言<br/>游戏内聊天面板"] --> L["Laya 意图分类<br/>DGX Spark 云算力节点"]
+    U["玩家自然语言<br/>游戏内聊天面板"] --> L["StepFun 意图分类<br/>DGX Spark 云算力节点"]
     L --> IDX["总 Skill 索引<br/>skills/SKILL.md"]
     IDX --> SK{"按主意图<br/>定位 Skill 文档"}
     SK -->|"follow / 移动"| MV["运动 Skill<br/>movement.md"]
@@ -90,7 +90,7 @@ flowchart LR
 ```
 玩家：为我搭建一个日式建筑
   │
-  ├─ Laya（DGX Spark 云节点）  → 主意图 build
+  ├─ StepFun（DGX Spark 云节点）  → 主意图 build
   ├─ 查总 Skill 索引            → 命中「建筑 Skill」
   ├─ 读 building.md            → 规定 StepFun 只能从真实蓝图库中选 ID
   ├─ StepFun                   → 建筑类型 japanese；最终选择 japanese_house
@@ -111,7 +111,7 @@ flowchart LR
 
 | 层次        | 回答的问题                   | 承担者                   | 输出                 |
 | --------- | ----------------------- | --------------------- | ------------------ |
-| **意图分类层** | 玩家现在是在聊天、建造、下指令，还是其他行动？ | Laya（DGX Spark 云端，开源） | 一个主意图 + 置信度，不改动世界  |
+| **意图分类层** | 玩家现在是在聊天、建造、下指令，还是其他行动？ | StepFun（DGX Spark 云端，开源） | 一个主意图 + 置信度，不改动世界  |
 | **领域规则层** | 这一类任务有哪些候选、约束和失败条件？     | Skill Markdown 文档     | 该领域的输入 / 候选 / 输出契约 |
 | **行动决策层** | 该选哪个蓝图、哪条白名单指令、哪项工具？    | StepFun（大模型）          | 候选动作及参数            |
 | **执行校验层** | 结果是否存在、参数是否合法、任务是否完成？   | Java / Fabric         | 确定性执行与反馈           |
@@ -128,7 +128,7 @@ flowchart LR
 
 4. **领域之间互不干扰**：改进建筑选择不会意外改变指令规则；每个领域可独立维护、独立测试。
 
-5. **失败可定位**：能清楚区分是 Laya 分类失败、StepFun 未选出有效目标、还是游戏内执行失败，而不是得到一个笼统的报错。
+5. **失败可定位**：能清楚区分是 StepFun 分类失败、StepFun 未选出有效目标、还是游戏内执行失败，而不是得到一个笼统的报错。
 
 6. **安全可控**：模型输出必须经过有限集合与参数校验，无法仅凭一句生成文本直接修改世界或执行任意命令。
 
@@ -140,7 +140,7 @@ flowchart LR
 
 ## 意图分类体系
 
-Laya 输出 **13 类主意图**（外加 `unknown`），并设独立的「指令意图」二次校验，避免把命令式语气的盖房、挖矿误判为管理指令：
+StepFun 输出 **13 类主意图**（外加 `unknown`），并设独立的「指令意图」二次校验，避免把命令式语气的盖房、挖矿误判为管理指令：
 
 
 
@@ -164,7 +164,7 @@ Laya 输出 **13 类主意图**（外加 `unknown`），并设独立的「指令
 
 
 
-| 玩家说的话        | Laya 判断   | 原因           |
+| 玩家说的话        | StepFun 判断   | 原因           |
 | ------------ | --------- | ------------ |
 | 「你会建日式房子吗？」  | `chat`    | 只是询问，不要求立刻行动 |
 | 「为我搭建一个日式建筑」 | `build`   | 明确要求实际建造     |
@@ -263,7 +263,7 @@ Laya 输出 **13 类主意图**（外加 `unknown`），并设独立的「指令
 | --------- | --------------------------------------------------- |
 | 游戏平台      | Minecraft `1.21.3`、Fabric Loader、Fabric API、Yarn 映射 |
 | 开发语言 / 构建 | Java `21`（Eclipse Adoptium）、Gradle、fabric-loom      |
-| 分类模型      | **Laya（开源模型）**，部署于 **DGX Spark 云算力节点**，HTTP 推理接口    |
+| 分类模型      | **StepFun（开源模型）**，部署于 **DGX Spark 云算力节点**，HTTP 推理接口    |
 | 决策模型      | **StepFun 阶跃星辰** `step-3.5-flash`（OpenAI 兼容接口）      |
 | 算力 / 平台   | **NVIDIA DGX Spark** 全栈算力、开源模型与 SDK                 |
 | 结构格式      | Litematica `.litematic`、原版 `.nbt`                   |
@@ -291,7 +291,7 @@ cd mc_aiplayer
 
 
 
-* 在 **DGX Spark** 提供的云算力节点上部署开源 **Laya** 模型，对外开放推理端口（如 `http://<host>:9072/predict`）；
+* 在 **DGX Spark** 提供的云算力节点上部署开源 **StepFun** 模型，对外开放推理端口（如 `http://<host>:9072/predict`）；
 
 * 模组通过 HTTP POST 提交对话文本，模型返回意图选项与置信度；
 
@@ -365,7 +365,7 @@ cd mc_aiplayer
 ```
 mc_aiplayer
 ├── src/main/java/io/github/zoyluo/aibot
-│   ├── intent/        # Laya 意图分类客户端（LayaIntentClient）
+│   ├── intent/        # StepFun 意图分类客户端（StepFunIntentClient）
 │   ├── blueprint/     # 蓝图目录、litematic/nbt 导入、StepFun 推荐、内置蓝图
 │   ├── item/          # 蓝图物品
 │   ├── brain/         # 大模型请求与决策
@@ -395,7 +395,7 @@ mc_aiplayer
 
 1. 先问「你会建日式房子吗？」—— 展示机器人**只回答、不误建**；
 
-2. 再说「为我搭建一个日式建筑」—— 展示 Laya 分类、StepFun 选蓝图、投影预览与确认搭建；
+2. 再说「为我搭建一个日式建筑」—— 展示 StepFun 分类、StepFun 选蓝图、投影预览与确认搭建；
 
 3. 接着说「把我设置成生存模式」—— 展示指令白名单选择与执行反馈；
 
@@ -423,4 +423,4 @@ mc_aiplayer
 
 本项目基于 [MIT License](LICENSE) 开源。
 
-**Laya 判断任务边界・Skill 定义领域规则・StepFun 选择行动・Fabric 在世界中完成它。**
+**StepFun 判断任务边界・Skill 定义领域规则・StepFun 选择行动・Fabric 在世界中完成它。**

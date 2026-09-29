@@ -40,7 +40,6 @@ import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.world.GameMode;
 import net.minecraft.block.Block;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.Identifier;
@@ -204,6 +203,7 @@ public final class AIBotServerNetworking {
             case "manual" -> BrainCoordinator.INSTANCE.setManualMode(target, payload.value());
             case "memory" -> BotRuntimeOptions.INSTANCE.setMemoryToolsEnabled(target, payload.value());
             case "reports" -> BotRuntimeOptions.INSTANCE.setVerboseReportsEnabled(target, payload.value());
+            case "analysis" -> BotRuntimeOptions.INSTANCE.setAnalysisEnabled(target, payload.value());
             default -> throw new IllegalArgumentException("unknown_option: " + payload.key());
         }
         sendSystem(player, target.getGameProfile().getName(), "设置已更新: " + payload.key() + "=" + payload.value());
@@ -246,16 +246,10 @@ public final class AIBotServerNetworking {
     }
 
     /**
-     * 蓝图物品"中键确认搭建":玩家(创造模式)手持蓝图物品,把 位置+旋转 落地为 BuildTask。
-     * 伪放置由 BuildTask.onStart 的 isDedicated() 决定(本地集成服=伪放置,无视地形直接替换方块);
-     * 创造模式不检查、不消耗材料(pseudoBuild 的 isCreative 豁免)。
+     * 蓝图物品"中键确认搭建":玩家手持蓝图物品,把 位置+旋转 落地为 BuildTask。
+     * 是否消耗材料由玩家/机器人当前游戏模式决定:创造不消耗,生存消耗。
      */
     private void handleBlueprintBuild(ServerPlayerEntity player, BlueprintBuildC2S payload) {
-        if (player.interactionManager.getGameMode() != GameMode.CREATIVE
-                && !player.getAbilities().creativeMode) {
-            sendSystem(player, "", "仅创造模式可确认搭建蓝图。");
-            return;
-        }
         ItemStack held = player.getMainHandStack();
         String blueprintId = BlueprintItem.blueprintId(held);
         if (blueprintId == null || blueprintId.isBlank()
@@ -269,15 +263,6 @@ public final class AIBotServerNetworking {
             return;
         }
         AIPlayerEntity target = bot.get();
-        // bot 被管理器强制为生存模式,创造上下文以主人(玩家)为准——与 BuildTask.isCreative 同口径。
-        boolean creativeContext = target.interactionManager.getGameMode() == GameMode.CREATIVE
-                || target.getAbilities().creativeMode
-                || player.interactionManager.getGameMode() == GameMode.CREATIVE
-                || player.getAbilities().creativeMode;
-        if (!creativeContext) {
-            sendSystem(player, target.getGameProfile().getName(), "你的 AI 助手不在创造模式,无法伪放置建造。");
-            return;
-        }
         try {
             BlueprintSchema schema = BlueprintLoader.load(blueprintId);
             BlueprintSchema rotated = BlueprintTransformer.rotate(schema, payload.rotation());

@@ -12,6 +12,7 @@ public final class BotRuntimeOptions {
 
     private final Map<UUID, Boolean> memoryTools = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> verboseReports = new ConcurrentHashMap<>();
+    private final Map<UUID, Boolean> analysis = new ConcurrentHashMap<>();
 
     private BotRuntimeOptions() {
     }
@@ -32,13 +33,27 @@ public final class BotRuntimeOptions {
         verboseReports.put(bot.getUuid(), enabled);
     }
 
+    public boolean analysisEnabled(AIPlayerEntity bot) {
+        return analysis.getOrDefault(bot.getUuid(), false);
+    }
+
+    public void setAnalysisEnabled(AIPlayerEntity bot, boolean enabled) {
+        if (enabled) {
+            analysis.put(bot.getUuid(), true);
+        } else {
+            analysis.remove(bot.getUuid());
+        }
+    }
+
     public void clear(AIPlayerEntity bot) {
         memoryTools.remove(bot.getUuid());
         verboseReports.remove(bot.getUuid());
+        analysis.remove(bot.getUuid());
     }
 
     public void clearAll() {
         memoryTools.clear();
         verboseReports.clear();
+        analysis.clear();
     }
 }

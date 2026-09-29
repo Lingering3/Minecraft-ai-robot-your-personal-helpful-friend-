@@ -1,4 +1,4 @@
-# mc_aiplayer + Laya/StepFun 交接说明
+# mc_aiplayer + StepFun/StepFun 交接说明
 
 ## 当前目标
 
@@ -8,7 +8,7 @@
 - 生存模式 AI 任务规划
 - 创造模式蓝图伪放置建造
 - StepFun 对话/大脑调用
-- Laya 仅用于生存模式任务识别
+- StepFun 仅用于生存模式任务识别
 
 当前项目位置：
 
@@ -30,7 +30,7 @@ C:\Users\jiexu\Documents\Codex\2026-09-27\gen-j\outputs\mc_aiplayer-creative-spl
 
 ```text
 玩家聊天
-  -> Laya 意图识别
+  -> StepFun 意图识别
   -> StepFun 大脑
   -> ToolRegistry / GoalPlanner / TaskManager
   -> 真实移动、采集、制作、挖矿、建造
@@ -50,7 +50,7 @@ C:\Users\jiexu\Documents\Codex\2026-09-27\gen-j\outputs\mc_aiplayer-creative-spl
 
 ### 创造模式
 
-创造模式不再走 Laya，也不走生存任务规划。
+创造模式不再走 StepFun，也不走生存任务规划。
 
 创造模式只支持：
 
@@ -113,9 +113,9 @@ src/main/java/io/github/zoyluo/aibot/brain/BotReporter.java
 
 注意：当前 bot 仍然偏话痨，用户明确说暂时不改。
 
-### 3. Laya 生存意图识别
+### 3. StepFun 生存意图识别
 
-Laya API：
+StepFun API：
 
 ```text
 POST http://106.13.186.155:9072/predict
@@ -128,13 +128,13 @@ GET  http://106.13.186.155:9072/health
 - 用于识别 `build / mine / gather / craft / follow / fight / chat`
 - build 时还识别 `house / tower / bridge / farm / castle / workstation`
 
-如果 Laya 失败或低置信度，生存模式会跳过 StepFun，并提示任务识别失败。
+如果 StepFun 失败或低置信度，生存模式会跳过 StepFun，并提示任务识别失败。
 
 相关文件：
 
 ```text
-src/main/java/io/github/zoyluo/aibot/intent/LayaIntent.java
-src/main/java/io/github/zoyluo/aibot/intent/LayaIntentClient.java
+src/main/java/io/github/zoyluo/aibot/intent/StepFunIntent.java
+src/main/java/io/github/zoyluo/aibot/intent/StepFunIntentClient.java
 src/main/java/io/github/zoyluo/aibot/brain/BrainCoordinator.java
 ```
 
@@ -275,7 +275,7 @@ src/main/java/io/github/zoyluo/aibot/command/AIBotCommand.java
 
 预期：
 
-- 先走 Laya
+- 先走 StepFun
 - 再进入 StepFun/GoalPlanner
 - 按生存逻辑执行
 
@@ -302,7 +302,7 @@ build/libs/aibot-0.0.2-stepfun-personal.jar
 ## 需要注意的问题
 
 1. 代码里还有个人 StepFun key，公开前必须移除。
-2. 创造模式 build 现在是关键词判断，不是 Laya/LLM 语义理解。
+2. 创造模式 build 现在是关键词判断，不是 StepFun/LLM 语义理解。
 3. 蓝图仍只支持项目自己的 JSON 格式，尚未支持 `.litematic` / `.schem`。
 4. bot 当前汇报较多，用户说先不改。
 5. `docs/GAMETEST_GUIDE.md` 是当前工作树里已有的未跟踪文件，不确定来源，未处理。
@@ -315,3 +315,4 @@ build/libs/aibot-0.0.2-stepfun-personal.jar
 3. 给 `blueprints/index.json` 做管理命令，如 `/aibot blueprints list/search/import`。
 4. 把密钥从源码移到配置/环境变量。
 5. 后续再降低 bot 的任务播报频率。
+

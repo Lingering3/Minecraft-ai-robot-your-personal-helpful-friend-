@@ -8,7 +8,7 @@
 
 ## 1. 目标
 
-1. 机器人 **生存模式与创造模式都能正常对话**,对话信息统一经 **Laya** 做类型判断:
+1. 机器人 **生存模式与创造模式都能正常对话**,对话信息统一经 **StepFun** 做类型判断:
    普通对话 / 任务型对话(任务型再细分: 建筑、搜集、挖矿、合成、农业畜牧、钓鱼、交易、对战、跟随、休息、囤积)。
 2. 任务落地分流(非对话任务):
    | 任务 | 生存模式 | 创造模式 |
@@ -21,9 +21,9 @@
 
 ---
 
-## 2. 任务分类体系(Laya intent)
+## 2. 任务分类体系(StepFun intent)
 
-Laya 分类 payload 扩展为 13 类。每类的生存/创造行为如下:
+StepFun 分类 payload 扩展为 13 类。每类的生存/创造行为如下:
 
 | intent | 类别 | 典型表述 | 生存模式 | 创造模式 |
 |---|---|---|---|---|
@@ -41,7 +41,7 @@ Laya 分类 payload 扩展为 13 类。每类的生存/创造行为如下:
 | `stockpile` | 囤积补给 | "把东西放进箱子/整理仓库/补给" | mcaiplayer 回路 | 暂不支持 |
 | `unknown` | 无法判断 | — | 跳过模型调用,提示换个说法 | 同左 |
 
-建筑子类型(build_kind,由 Laya 第二个问题判定):
+建筑子类型(build_kind,由 StepFun 第二个问题判定):
 `house / castle / tower / bridge / farm / workstation / gate / statue / temple / unknown`。
 
 对应原项目功能的映射(分类 → 原项目 Task 类):
@@ -68,13 +68,13 @@ Laya 分类 payload 扩展为 13 类。每类的生存/创造行为如下:
             └─ BrainCoordinator.handleMessage(bot, sender, text)
                  ├─ creativeContext(bot)?  (bot 或 owner 为创造)
                  │    ├─ 是 → handleCreativeMessage
-                 │    └─ 否 → Laya 分类 → handleRecognizedMessage(生存 mcaiplayer 回路)
+                 │    └─ 否 → StepFun 分类 → handleRecognizedMessage(生存 mcaiplayer 回路)
                  │
-                 ├─ handleCreativeMessage: 同样先 Laya 分类
+                 ├─ handleCreativeMessage: 同样先 StepFun 分类
                  │    ├─ chat      → handleCreativeChat(StepFun 无工具对话)
                  │    ├─ build     → startCreativeBuild(创造建筑回路)
                  │    ├─ 其他任务  → 回复"创造模式暂不支持XX任务"
-                 │    └─ Laya 失败 → 本地关键词兜底(旧行为) → 兜不到按对话
+                 │    └─ StepFun 失败 → 本地关键词兜底(旧行为) → 兜不到按对话
                  └─ startCreativeBuild
                       ├─ BlueprintRecommender.recommend(text, kind)
                       │    StepFun 从 本地蓝图库 + 模型掌握的网上建筑知识 选出最匹配蓝图 id
@@ -108,7 +108,7 @@ Laya 分类 payload 扩展为 13 类。每类的生存/创造行为如下:
 ### 与旧行为差异
 
 - 旧: 创造模式用本地关键词(creativeBuildKind)直接判断 → 自动选址(anchor=null) 立刻伪放置。
-- 新: 创造模式同样先经 **Laya 分类**;建造任务由 **StepFun 选蓝图** → **蓝图物品交互**确定位置/旋转 → 确认后才伪放置。Laya 失败时保留本地关键词兜底。
+- 新: 创造模式同样先经 **StepFun 分类**;建造任务由 **StepFun 选蓝图** → **蓝图物品交互**确定位置/旋转 → 确认后才伪放置。StepFun 失败时保留本地关键词兜底。
 
 ---
 
@@ -133,7 +133,7 @@ Laya 分类 payload 扩展为 13 类。每类的生存/创造行为如下:
 
 ## 5. StepFun 蓝图选择(BlueprintRecommender)
 
-- 触发时机:**确认是建造任务之后**(Laya intent=build)。
+- 触发时机:**确认是建造任务之后**(StepFun intent=build)。
 - 候选 = `BlueprintCatalog.entries()`(内置 + blueprints/*.json + structures/*.nbt),按 tag 数升序取前 60 个。
 - Prompt 让 StepFun 模型结合自身建筑知识(含网上常见 Minecraft 建筑风格常识)与本地候选清单,
   **只输出一个蓝图 id**;解析失败回退本地关键词打分 `BlueprintCatalog.resolve`。
@@ -161,8 +161,8 @@ Laya 分类 payload 扩展为 13 类。每类的生存/创造行为如下:
 ## 7. 改动文件清单
 
 新增:
-- `intent/LayaIntentClient.java`(重写: 13 类 intent + 9 类 build_kind)
-- `intent/LayaIntent.java`(新增 isBuild/isChat + promptLine 扩展)
+- `intent/StepFunIntentClient.java`(重写: 13 类 intent + 9 类 build_kind)
+- `intent/StepFunIntent.java`(新增 isBuild/isChat + promptLine 扩展)
 - `blueprint/BlueprintRecommender.java`(StepFun 选蓝图)
 - `blueprint/BlueprintTransformer.java`(蓝图旋转)
 - `blueprint/StructureImporter.java`(structure .nbt 导入)
@@ -176,7 +176,7 @@ Laya 分类 payload 扩展为 13 类。每类的生存/创造行为如下:
 - lang: `zh_cn.json` / `en_us.json` 增加 `item.aibot.blueprint`、`key.aibot.blueprint_confirm`
 
 修改:
-- `brain/BrainCoordinator.java`(创造分流重构: Laya → StepFun 选蓝图 → 发蓝图物品;其他任务返回不支持)
+- `brain/BrainCoordinator.java`(创造分流重构: StepFun → StepFun 选蓝图 → 发蓝图物品;其他任务返回不支持)
 - `blueprint/BlueprintCatalog.java`(纳入 structureEntries;exists 支持 .nbt)
 - `task/BlueprintLoader.java`(json 缺失时回退结构文件)
 - `network/payload/AIPayloads.java`(注册 BlueprintBuildC2S)
@@ -202,3 +202,4 @@ Laya 分类 payload 扩展为 13 类。每类的生存/创造行为如下:
 - [ ] 用结构方块制作首批正式 structure 蓝图
 - [ ] "网上资源"目前由 StepFun 模型知识兜底,后续可接入真实结构库下载/检索
 - [ ] StepFun key 移除问题(HANDOFF 遗留)仍未处理,发布前必须清理
+

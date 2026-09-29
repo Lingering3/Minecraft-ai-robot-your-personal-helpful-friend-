@@ -355,7 +355,7 @@ public final class ToolRegistry {
         register("build_house", "Build a house/shelter. Use for 盖房子/建个家/造房子/盖个小屋/build a house. The goal system auto-gathers ALL missing materials (wood/stone/glass) then builds — call once then STOP. You must choose and pass an existing blueprint id yourself, or pass width/depth/height/material for a custom house. There is no local fallback/default blueprint selection.", objectSchema()
                 .property("blueprint", stringSchema("required local blueprint id when not using custom dimensions; must exactly match an existing blueprint id"))
                 .property("query", stringSchema("original building request, for logs only; not used for fallback selection"))
-                .property("kind", stringSchema("building kind from Laya, e.g. house/castle/tower/bridge/farm/workstation"))
+                .property("kind", stringSchema("building kind from StepFun intent analysis, e.g. house/castle/tower/bridge/farm/workstation"))
                 .property("width", integerSchema("custom house outer width in blocks (3..16)", 3, 16))
                 .property("depth", integerSchema("custom house outer depth in blocks (3..16)", 3, 16))
                 .property("height", integerSchema("custom house wall height in blocks (2..8)", 2, 8))

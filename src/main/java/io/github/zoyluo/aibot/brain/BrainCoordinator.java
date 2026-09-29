@@ -5,8 +5,8 @@ import io.github.zoyluo.aibot.blueprint.BlueprintCatalog;
 import io.github.zoyluo.aibot.blueprint.BlueprintRecommender;
 import io.github.zoyluo.aibot.entity.AIPlayerEntity;
 import io.github.zoyluo.aibot.goal.GoalExecutor;
-import io.github.zoyluo.aibot.intent.LayaIntent;
-import io.github.zoyluo.aibot.intent.LayaIntentClient;
+import io.github.zoyluo.aibot.intent.StepFunIntent;
+import io.github.zoyluo.aibot.intent.StepFunIntentClient;
 import io.github.zoyluo.aibot.item.BlueprintItem;
 import io.github.zoyluo.aibot.item.BlueprintItems;
 import io.github.zoyluo.aibot.log.BotLog;
@@ -30,6 +30,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -69,17 +70,29 @@ public final class BrainCoordinator {
 
     public boolean handleMessage(AIPlayerEntity bot, String senderName, String text) {
         ensureConfigured();
+        if (handleFastControl(bot, text)) {
+            return true;
+        }
         if (creativeContext(bot)) {
             return handleCreativeMessage(bot, senderName, text);
         }
-        LayaIntentClient.INSTANCE.classify(text).whenComplete((intent, throwable) ->
+        StepFunIntentClient.INSTANCE.classify(text).whenComplete((intent, throwable) ->
                 bot.getServer().execute(() -> {
                     if (throwable != null || intent == null || intent.isEmpty()) {
-                        BotLog.comm(bot, "laya_intent_rejected");
+                        BotLog.comm(bot, "stepfun_intent_rejected");
                         sendPanelChat(bot, "system", "任务识别失败，请换个更明确的说法。");
                         return;
                     }
-                    LayaIntent recognized = intent.orElseThrow();
+                    StepFunIntent recognized = intent.orElseThrow();
+                    emitAnalysis(bot, recognized);
+                    if (recognized.isChat()) {
+                        handleParallelChat(bot, senderName, text, recognized);
+                        return;
+                    }
+                    if ("status".equals(recognized.intent())) {
+                        sendPanelChat(bot, "bot", statusText(bot));
+                        return;
+                    }
                     if (recognized.isBuild()) {
                         startCreativeBuild(bot, senderName, text);
                         return;
@@ -90,22 +103,27 @@ public final class BrainCoordinator {
     }
 
     /**
-     * 创造模式消息路由:同样先经 Laya 分类,再按类别分流。
+     * 创造模式消息路由:同样先经 StepFun 分类,再按类别分流。
      * chat → 普通对话(无工具);build → 创造建筑回路(StepFun 选蓝图 + 蓝图物品);
      * 其他任务型 → 继续走正常任务链路,让“过来/挖矿/搜集”等命令在创造模式也能响应。
-     * Laya 识别失败时不执行任务。
+     * StepFun 识别失败时不执行任务。
      */
     private boolean handleCreativeMessage(AIPlayerEntity bot, String senderName, String text) {
-        LayaIntentClient.INSTANCE.classify(text).whenComplete((intent, throwable) ->
+        StepFunIntentClient.INSTANCE.classify(text).whenComplete((intent, throwable) ->
                 bot.getServer().execute(() -> {
                     if (throwable != null || intent == null || intent.isEmpty()) {
-                        BotLog.comm(bot, "laya_intent_rejected_creative");
+                        BotLog.comm(bot, "stepfun_intent_rejected_creative");
                         sendPanelChat(bot, "system", "任务识别失败，请换个更明确的说法。");
                         return;
                     }
-                    LayaIntent recognized = intent.orElseThrow();
+                    StepFunIntent recognized = intent.orElseThrow();
+                    emitAnalysis(bot, recognized);
                     if (recognized.isChat()) {
-                        handleCreativeChat(bot, senderName, text);
+                        handleParallelChat(bot, senderName, text, recognized);
+                        return;
+                    }
+                    if ("status".equals(recognized.intent())) {
+                        sendPanelChat(bot, "bot", statusText(bot));
                         return;
                     }
                     if (recognized.isBuild()) {
@@ -115,7 +133,7 @@ public final class BrainCoordinator {
                     BotLog.comm(bot, "creative_task_dispatch",
                             "sender", senderName,
                             "intent", recognized.intent(),
-                            "build_kind", recognized.buildKind());
+                            "action", recognized.actionSummary());
                     handleRecognizedMessage(bot, senderName, text, recognized);
                 }));
         return true;
@@ -245,7 +263,98 @@ public final class BrainCoordinator {
         return true;
     }
 
-    private boolean handleRecognizedMessage(AIPlayerEntity bot, String senderName, String text, LayaIntent intent) {
+    private boolean handleFastControl(AIPlayerEntity bot, String text) {
+        String normalized = text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
+        if (normalized.equals("stop") || normalized.equals("停止")) {
+            boolean changed = TaskManager.INSTANCE.pauseUserIntent(bot, "chat_stop");
+            io.github.zoyluo.aibot.goal.GoalExecutor.INSTANCE.clearUserGoal(bot);
+            bot.getActionPack().stopAll();
+            sendPanelChat(bot, "bot", changed ? "已停止当前任务，进度已暂存。说 start 或 开始 可以继续。" : "我现在没有正在执行的任务。");
+            return true;
+        }
+        if (normalized.equals("start") || normalized.equals("开始") || normalized.equals("继续")) {
+            boolean changed = TaskManager.INSTANCE.resumeUserIntent(bot, "chat_start");
+            sendPanelChat(bot, "bot", changed ? "我继续刚才的任务。" : "没有可继续的暂停任务。");
+            return true;
+        }
+        if (normalized.equals("status") || normalized.equals("状态") || normalized.contains("在干什么")
+                || normalized.contains("在做什么") || normalized.contains("进度")) {
+            sendPanelChat(bot, "bot", statusText(bot));
+            return true;
+        }
+        return false;
+    }
+
+    private void emitAnalysis(AIPlayerEntity bot, StepFunIntent intent) {
+        if (!BotRuntimeOptions.INSTANCE.analysisEnabled(bot)) {
+            return;
+        }
+        String action = intent.actionSummary() == null || intent.actionSummary().isBlank()
+                ? "等待后续决策" : intent.actionSummary();
+        sendPanelChat(bot, "system", "分析: StepFun 初步判断为 " + intent.intent()
+                + "，bot 将" + action + "。");
+    }
+
+    private boolean handleParallelChat(AIPlayerEntity bot, String senderName, String text, StepFunIntent intent) {
+        ensureConfigured();
+        DecisionLease lease = new DecisionLease(bot.getUuid(), UUID.randomUUID(), 1L, 1L);
+        List<ChatMessage> history = List.of(
+                ChatMessage.system(parallelChatPrompt(bot.getGameProfile().getName())),
+                ChatMessage.user("[" + senderName + "] says: " + text
+                        + "\n\n" + intent.promptLine()
+                        + "\n\nCurrent task status:\n" + statusText(bot)));
+        try {
+            executor.submit(
+                    bot,
+                    lease,
+                    history,
+                    List.of(),
+                    (responseLease, response) -> {
+                        String cleanedContent = FunctionTagSanitizer.clean(response.content());
+                        if (!cleanedContent.isBlank()) {
+                            sendPanelChat(bot, "bot", cleanedContent);
+                        }
+                    },
+                    (errorLease, throwable) -> {
+                        String message = throwable.getMessage() == null
+                                ? throwable.getClass().getSimpleName() : throwable.getMessage();
+                        BotLog.error(bot, "parallel_chat_failed", throwable, "message", message);
+                        sendPanelChat(bot, "system", "对话请求失败: " + message);
+                    });
+        } catch (RuntimeException exception) {
+            String message = exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage();
+            BotLog.error(bot, "parallel_chat_submit_failed", exception, "message", message);
+            sendPanelChat(bot, "system", "对话请求未能提交: " + message);
+        }
+        return true;
+    }
+
+    private static String statusText(AIPlayerEntity bot) {
+        TaskStatus task = TaskManager.INSTANCE.status(bot);
+        String paused = TaskManager.INSTANCE.isUserPaused(bot)
+                ? "，当前已暂停，可说 start/开始 继续" : "";
+        if (io.github.zoyluo.aibot.goal.GoalExecutor.INSTANCE.hasActivePlan(bot)) {
+            String title = io.github.zoyluo.aibot.goal.GoalExecutor.INSTANCE.activeGoalTitle(bot);
+            String step = "";
+            int index = io.github.zoyluo.aibot.goal.GoalExecutor.INSTANCE.activeGoalCurrentIndex(bot);
+            List<String> steps = io.github.zoyluo.aibot.goal.GoalExecutor.INSTANCE.activeGoalSteps(bot);
+            if (index >= 0 && index < steps.size()) {
+                step = "，当前步骤: " + steps.get(index);
+            }
+            return "我正在执行目标: " + (title == null || title.isBlank() ? "未命名目标" : title)
+                    + step + paused + "。";
+        }
+        if ("idle".equals(task.name())) {
+            return "我现在空闲" + paused + "。";
+        }
+        return "我正在执行: " + task.name()
+                + "，状态 " + task.state()
+                + "，进度 " + Math.round(task.progress() * 100.0D) + "%"
+                + (task.description().isBlank() ? "" : "，" + task.description())
+                + paused + "。";
+    }
+
+    private boolean handleRecognizedMessage(AIPlayerEntity bot, String senderName, String text, StepFunIntent intent) {
         ensureConfigured();
         BotConversation conversation = conversations.computeIfAbsent(bot.getUuid(), BotConversation::new);
         boolean supersededDecision = conversation.decision.busy();
@@ -852,6 +961,15 @@ public final class BrainCoordinator {
                 rotate and confirm placement. So when the player asks to build something, briefly
                 acknowledge and tell them a blueprint item has been placed in their inventory.
                 Always reply in Simplified Chinese, briefly and naturally.
+                """.formatted(botName);
+    }
+
+    private static String parallelChatPrompt(String botName) {
+        return """
+                你是 Minecraft AI 助手 %s 的并行对话模块。
+                你只负责回答玩家、解释当前状态或安抚确认，不得声称已经执行新的世界动作。
+                主建造/采矿等长任务可能正在并行运行；不要让聊天中断任务。
+                总是用简体中文，回复一两句即可。
                 """.formatted(botName);
     }
 

@@ -7,6 +7,7 @@ import io.github.zoyluo.aibot.auth.BotAuthorizationGate;
 import io.github.zoyluo.aibot.auth.BotAuthorizationPolicy;
 import io.github.zoyluo.aibot.brain.BrainValidation;
 import io.github.zoyluo.aibot.brain.BrainCoordinator;
+import io.github.zoyluo.aibot.brain.BotRuntimeOptions;
 import io.github.zoyluo.aibot.runtime.IntentController;
 import io.github.zoyluo.aibot.runtime.RuntimeLifecycleCoordinator;
 import io.github.zoyluo.aibot.entity.AIPlayerEntity;
@@ -42,6 +43,12 @@ public final class AIBotBrainSubcommand {
                                         .executes(context -> manual(context.getSource(), StringArgumentType.getString(context, "name"), true)))
                                 .then(literal("off")
                                         .executes(context -> manual(context.getSource(), StringArgumentType.getString(context, "name"), false)))))
+                .then(literal("analysis")
+                        .then(botName()
+                                .then(literal("on")
+                                        .executes(context -> analysis(context.getSource(), StringArgumentType.getString(context, "name"), true)))
+                                .then(literal("off")
+                                        .executes(context -> analysis(context.getSource(), StringArgumentType.getString(context, "name"), false)))))
                 .then(literal("say")
                         .then(botName()
                                 .then(argument("text", MessageArgumentType.message())
@@ -122,6 +129,17 @@ public final class AIBotBrainSubcommand {
         }
         BrainCoordinator.INSTANCE.setManualMode(bot.get(), enabled);
         source.sendFeedback(() -> Text.literal("[AIBot] manual low-level tools " + (enabled ? "on" : "off") + " for " + name), false);
+        return 1;
+    }
+
+    private static int analysis(ServerCommandSource source, String name, boolean enabled) {
+        Optional<AIPlayerEntity> bot = getBot(source, name, BotAuthorizationPolicy.Operation.ADMIN, "command:brain_analysis");
+        if (bot.isEmpty()) {
+            return 0;
+        }
+        BotRuntimeOptions.INSTANCE.setAnalysisEnabled(bot.get(), enabled);
+        source.sendFeedback(() -> Text.literal("[AIBot] analysis module "
+                + (enabled ? "on" : "off") + " for " + name), false);
         return 1;
     }
 
