@@ -44,6 +44,11 @@ public final class AIBotBrainSubcommand {
                                 .then(literal("off")
                                         .executes(context -> manual(context.getSource(), StringArgumentType.getString(context, "name"), false)))))
                 .then(literal("analysis")
+                        .executes(context -> analysisStatus(context.getSource()))
+                        .then(literal("on")
+                                .executes(context -> analysisOwned(context.getSource(), true)))
+                        .then(literal("off")
+                                .executes(context -> analysisOwned(context.getSource(), false)))
                         .then(botName()
                                 .then(literal("on")
                                         .executes(context -> analysis(context.getSource(), StringArgumentType.getString(context, "name"), true)))
@@ -143,6 +148,31 @@ public final class AIBotBrainSubcommand {
         return 1;
     }
 
+    private static int analysisOwned(ServerCommandSource source, boolean enabled) {
+        Optional<AIPlayerEntity> bot = ownedBot(source, BotAuthorizationPolicy.Operation.ADMIN, "command:brain_analysis");
+        if (bot.isEmpty()) {
+            return 0;
+        }
+        BotRuntimeOptions.INSTANCE.setAnalysisEnabled(bot.get(), enabled);
+        String name = bot.get().getGameProfile().getName();
+        source.sendFeedback(() -> Text.literal("[AIBot] analysis module "
+                + (enabled ? "on" : "off") + " for " + name), false);
+        return 1;
+    }
+
+    private static int analysisStatus(ServerCommandSource source) {
+        Optional<AIPlayerEntity> bot = ownedBot(source, BotAuthorizationPolicy.Operation.VIEW, "command:brain_analysis");
+        if (bot.isEmpty()) {
+            return 0;
+        }
+        String name = bot.get().getGameProfile().getName();
+        boolean enabled = BotRuntimeOptions.INSTANCE.analysisEnabled(bot.get());
+        source.sendFeedback(() -> Text.literal("[AIBot] analysis module "
+                + (enabled ? "on" : "off") + " for " + name
+                + "。用 /aibot brain analysis on|off 切换。"), false);
+        return 1;
+    }
+
     private static int say(ServerCommandSource source, String name, String text) {
         Optional<AIPlayerEntity> bot = getBot(source, name, BotAuthorizationPolicy.Operation.COMMAND, "command:brain_say");
         if (bot.isEmpty()) {
@@ -225,5 +255,24 @@ public final class AIBotBrainSubcommand {
                                                    BotAuthorizationPolicy.Operation operation,
                                                    String channel) {
         return BotAuthorizationGate.INSTANCE.resolveAuthorized(source, name, operation, channel);
+    }
+
+    private static Optional<AIPlayerEntity> ownedBot(ServerCommandSource source,
+                                                     BotAuthorizationPolicy.Operation operation,
+                                                     String channel) {
+        if (source.getPlayer() == null) {
+            source.sendError(Text.literal("[AIBot] 控制台请使用 /aibot brain analysis <bot名字> on|off"));
+            return Optional.empty();
+        }
+        Optional<AIPlayerEntity> bot = AIPlayerManager.INSTANCE.botOf(source.getPlayer().getUuid());
+        if (bot.isEmpty()) {
+            source.sendError(Text.literal("[AIBot] 你还没有自己的 bot。"));
+            return Optional.empty();
+        }
+        if (!BotAuthorizationGate.INSTANCE.authorize(source, bot.get(), operation, channel)) {
+            source.sendError(Text.literal("[AIBot] 找不到该 Bot 或无权限。"));
+            return Optional.empty();
+        }
+        return bot;
     }
 }

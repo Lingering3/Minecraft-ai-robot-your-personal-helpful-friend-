@@ -49,6 +49,7 @@ public final class BlueprintCatalog {
         entries.addAll(indexEntries());
         entries.addAll(jsonBlueprintEntries());
         entries.addAll(structureEntries());
+        entries.addAll(remoteEntries());
         return entries.stream()
                 .collect(java.util.stream.Collectors.toMap(
                         BlueprintEntry::id,
@@ -130,6 +131,17 @@ public final class BlueprintCatalog {
             } else {
                 entries.add(new BlueprintEntry(id, id, List.of(id)));
             }
+        }
+        return entries;
+    }
+
+    private static List<BlueprintEntry> remoteEntries() {
+        List<BlueprintEntry> entries = new ArrayList<>();
+        for (RemoteBlueprints.RemoteEntry remote : RemoteBlueprints.entries()) {
+            List<String> tags = new ArrayList<>(remote.tags());
+            tags.add(remote.id());
+            tags.add(remote.name());
+            entries.add(new BlueprintEntry(remote.id(), remote.name(), tags));
         }
         return entries;
     }

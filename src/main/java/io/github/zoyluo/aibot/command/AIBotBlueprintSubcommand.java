@@ -10,6 +10,7 @@ import io.github.zoyluo.aibot.auth.BotAuthorizationGate;
 import io.github.zoyluo.aibot.auth.BotAuthorizationPolicy;
 import io.github.zoyluo.aibot.blueprint.BlueprintCatalog;
 import io.github.zoyluo.aibot.blueprint.LitematicaImporter;
+import io.github.zoyluo.aibot.blueprint.RemoteBlueprints;
 import io.github.zoyluo.aibot.blueprint.StructureImporter;
 import io.github.zoyluo.aibot.item.BlueprintItem;
 import io.github.zoyluo.aibot.item.BlueprintItems;
@@ -52,6 +53,11 @@ public final class AIBotBlueprintSubcommand {
                                 .executes(context -> info(context.getSource(),
                                         StringArgumentType.getString(context, "id")))))
                 .then(literal("reload").executes(context -> reload(context.getSource())))
+                .then(literal("remote")
+                        .executes(context -> showRemote(context.getSource()))
+                        .then(argument("enabled", BoolArgumentType.bool())
+                                .executes(context -> setRemote(context.getSource(),
+                                        BoolArgumentType.getBool(context, "enabled")))))
                 .then(literal("required")
                         .then(argument("value", BoolArgumentType.bool())
                                 .executes(context -> setRequired(context.getSource(),
@@ -79,8 +85,9 @@ public final class AIBotBlueprintSubcommand {
                     .append(sizeOf(entry.id()));
         }
         source.sendFeedback(() -> Text.literal("[AIBot] 可选建筑蓝图(" + entries.size()
-                + "):\n" + catalog
-                + "\n使用: /aibot blueprint info \"蓝图id\" 或 /aibot blueprint give \"蓝图id\""), false);
+                + ", 来源=" + blueprintSourceText() + "):\n" + catalog
+                + "\n使用: /aibot blueprint info \"蓝图id\" 或 /aibot blueprint give \"蓝图id\""
+                + "\n远程蓝图: /aibot blueprint remote true|false (默认 false,只用本地)"), false);
         return entries.size();
     }
 
@@ -154,16 +161,22 @@ public final class AIBotBlueprintSubcommand {
     private static int reload(ServerCommandSource source) {        if (!BotAuthorizationGate.INSTANCE.requireGlobalAdmin(source, "command:blueprint:reload")) {
             return 0;
         }
+        RemoteBlueprints.clearCache();
         int structures = StructureImporter.listStructures().size();
         int litematics = LitematicaImporter.listLitematics().size();
+        int remote = AIBotConfig.get().remoteBlueprints().isEnabled() ? RemoteBlueprints.entries().size() : 0;
         source.sendFeedback(() -> Text.literal("[AIBot] 已重新扫描蓝图库: 内置 json=" + 5
                 + " + blueprints/*.json + blueprints/structures/*.nbt=" + structures
                 + " + blueprints/structures/*.litematic=" + litematics
-                + " (结构方块和 Litematica 蓝图请放到 游戏目录/blueprints/structures/ 下)"), true);
+                + " + 远程清单=" + remote
+                + " (远程蓝图选中后会下载到 游戏目录/blueprints/structures/ 再按 Litematic 加载)"), true);
         return 1;
     }
 
     private static String sizeOf(String id) {
+        if (RemoteBlueprints.has(id) && !LitematicaImporter.existsLocal(id)) {
+            return RemoteBlueprints.sizeText(id) + ", remote";
+        }
         try {
             BlueprintSchema schema = BlueprintLoader.load(id);
             return schema.width() + "x" + schema.height() + "x" + schema.depth()
@@ -171,6 +184,41 @@ public final class AIBotBlueprintSubcommand {
         } catch (IOException exception) {
             return "?";
         }
+    }
+
+    private static int showRemote(ServerCommandSource source) {
+        if (!BotAuthorizationGate.INSTANCE.requireGlobalAdmin(source, "command:blueprint:remote")) {
+            return 0;
+        }
+        AIBotConfig.RemoteBlueprints remote = AIBotConfig.get().remoteBlueprints();
+        source.sendFeedback(() -> Text.literal("[AIBot] 远程蓝图搜索="
+                + (remote.isEnabled() ? "开启" : "关闭")
+                + "，当前来源=" + blueprintSourceText()
+                + "，manifest=" + remote.manifestUrl()
+                + "。切换: /aibot blueprint remote true|false"), false);
+        return 1;
+    }
+
+    private static int setRemote(ServerCommandSource source, boolean enabled) {
+        if (!BotAuthorizationGate.INSTANCE.requireGlobalAdmin(source, "command:blueprint:remote")) {
+            return 0;
+        }
+        AIBotConfig.RemoteBlueprints current = AIBotConfig.get().remoteBlueprints();
+        AIBotConfig.get().withRemoteBlueprints(new AIBotConfig.RemoteBlueprints(
+                enabled,
+                current.manifestUrl(),
+                current.cacheSeconds(),
+                current.downloadTimeoutSeconds(),
+                current.maxFileSizeMb()));
+        RemoteBlueprints.clearCache();
+        source.sendFeedback(() -> Text.literal("[AIBot] 已设置蓝图来源: "
+                + blueprintSourceText()
+                + "。远程蓝图只拉清单,选中后下载 .litematic 到 blueprints/structures/ 再建造。"), true);
+        return 1;
+    }
+
+    private static String blueprintSourceText() {
+        return AIBotConfig.get().remoteBlueprints().isEnabled() ? "本地+云端清单" : "本地";
     }
 
     private static CompletableFuture<Suggestions> suggestBlueprintIds(SuggestionsBuilder builder) {

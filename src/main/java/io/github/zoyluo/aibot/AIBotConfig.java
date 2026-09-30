@@ -38,7 +38,8 @@ public record AIBotConfig(
         Goal goal,
         Nav nav,
         Pickup pickup,
-        Creative creative
+        Creative creative,
+        RemoteBlueprints remoteBlueprints
 ) {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String EMBEDDED_STEPFUN_API_KEY = "sCZoeY1N6rv2LUdM711mDLubdUeYAVTLjrRqJU260xmDAmWvL3WCr2q5eHuxrxC7";
@@ -103,16 +104,22 @@ public record AIBotConfig(
     }
 
     public AIBotConfig withDeepSeek(DeepSeek deepseek) {
-        return new AIBotConfig(profile(), operatorCapabilities(), deepseek, perception(), brain(), watchdog(), logging(), survival(), combat(), night(), mining(), goal(), nav(), pickup(), creative());
+        return new AIBotConfig(profile(), operatorCapabilities(), deepseek, perception(), brain(), watchdog(), logging(), survival(), combat(), night(), mining(), goal(), nav(), pickup(), creative(), remoteBlueprints());
+    }
+
+    public AIBotConfig withRemoteBlueprints(RemoteBlueprints remoteBlueprints) {
+        AIBotConfig updated = new AIBotConfig(profile(), operatorCapabilities(), deepseek(), perception(), brain(), watchdog(), logging(), survival(), combat(), night(), mining(), goal(), nav(), pickup(), creative(), remoteBlueprints);
+        instance = updated;
+        return updated;
     }
 
     private AIBotConfig withProfile(OperatingProfile profile) {
-        return new AIBotConfig(profile, operatorCapabilities(), deepseek(), perception(), brain(), watchdog(), logging(), survival(), combat(), night(), mining(), goal(), nav(), pickup(), creative());
+        return new AIBotConfig(profile, operatorCapabilities(), deepseek(), perception(), brain(), watchdog(), logging(), survival(), combat(), night(), mining(), goal(), nav(), pickup(), creative(), remoteBlueprints());
     }
 
     /** 动态切换创造模式配置(命令用),并立即生效。 */
     public AIBotConfig withCreative(Creative creative) {
-        AIBotConfig updated = new AIBotConfig(profile(), operatorCapabilities(), deepseek(), perception(), brain(), watchdog(), logging(), survival(), combat(), night(), mining(), goal(), nav(), pickup(), creative);
+        AIBotConfig updated = new AIBotConfig(profile(), operatorCapabilities(), deepseek(), perception(), brain(), watchdog(), logging(), survival(), combat(), night(), mining(), goal(), nav(), pickup(), creative, remoteBlueprints());
         instance = updated;
         return updated;
     }
@@ -136,7 +143,8 @@ public record AIBotConfig(
                 goal == null ? defaults.goal : goal.withDefaults(defaults.goal),
                 nav == null ? defaults.nav : nav.withDefaults(defaults.nav),
                 pickup == null ? defaults.pickup : pickup.withDefaults(defaults.pickup),
-                creative == null ? defaults.creative : creative.withDefaults(defaults.creative));
+                creative == null ? defaults.creative : creative.withDefaults(defaults.creative),
+                remoteBlueprints == null ? defaults.remoteBlueprints : remoteBlueprints.withDefaults(defaults.remoteBlueprints));
     }
 
     public static AIBotConfig defaults() {
@@ -168,7 +176,9 @@ public record AIBotConfig(
                 new Goal(24, true, true), // S7:配方补全后链更深(熟食/盾/钻装备等),16→24 留余量
                 new Nav(1.0D, 12, 60, 30, 4, 2, 3.0D, 3),
                 new Pickup(2.75D, 2.5D, 8.0D), // 实测 1.5/1.0 太小:砍树掉落物垂直差>1 就吸不到→countSoFar=0 死循环
-                new Creative(Boolean.FALSE)); // 创造模式默认无需蓝图,直接搭建;true 时给蓝图物品确认位置
+                new Creative(Boolean.FALSE), // 创造模式默认无需蓝图,直接搭建;true 时给蓝图物品确认位置
+                new RemoteBlueprints(Boolean.FALSE, "https://tt2.fun/aibot/blueprints/manifest.json",
+                        300, 60, 64));
     }
 
     private static void logProfileResolution(ProfileResolver.Resolution resolution,
@@ -390,6 +400,27 @@ public record AIBotConfig(
 
         public boolean isBlueprintRequired() {
             return !Boolean.FALSE.equals(blueprintRequired);
+        }
+    }
+
+    public record RemoteBlueprints(
+            Boolean enabled,
+            String manifestUrl,
+            int cacheSeconds,
+            int downloadTimeoutSeconds,
+            int maxFileSizeMb
+    ) {
+        RemoteBlueprints withDefaults(RemoteBlueprints defaults) {
+            return new RemoteBlueprints(
+                    boolOrDefault(enabled, defaults.enabled),
+                    blankToDefault(manifestUrl, defaults.manifestUrl),
+                    positiveOrDefault(cacheSeconds, defaults.cacheSeconds),
+                    positiveOrDefault(downloadTimeoutSeconds, defaults.downloadTimeoutSeconds),
+                    positiveOrDefault(maxFileSizeMb, defaults.maxFileSizeMb));
+        }
+
+        public boolean isEnabled() {
+            return !Boolean.FALSE.equals(enabled);
         }
     }
 

@@ -146,6 +146,7 @@ public final class BrainCoordinator {
      * false: 跳过蓝图物品,自动在玩家前方选位置直接搭建。
      */
     private void startCreativeBuild(AIPlayerEntity bot, String senderName, String text) {
+        prepareForPrimaryIntent(bot, "build");
         BlueprintRecommender.recommend(text).whenComplete((recommended, throwable) ->
                 bot.getServer().execute(() -> {
                     boolean recommendedByModel = throwable == null && recommended != null && recommended.isPresent();
@@ -356,6 +357,7 @@ public final class BrainCoordinator {
 
     private boolean handleRecognizedMessage(AIPlayerEntity bot, String senderName, String text, StepFunIntent intent) {
         ensureConfigured();
+        prepareForPrimaryIntent(bot, intent.intent());
         BotConversation conversation = conversations.computeIfAbsent(bot.getUuid(), BotConversation::new);
         boolean supersededDecision = conversation.decision.busy();
         DecisionLease lease = conversation.decision.beginEpoch();
@@ -388,6 +390,21 @@ public final class BrainCoordinator {
         io.github.zoyluo.aibot.goal.GoalExecutor.INSTANCE.clearUserGoal(bot); // B:用户发来新消息→清空原始目标记忆,本条消息触发的首个目标将成为新"用户原始目标"
         submit(bot, conversation, lease);
         return true;
+    }
+
+    private void prepareForPrimaryIntent(AIPlayerEntity bot, String intent) {
+        String normalized = intent == null ? "" : intent.toLowerCase(Locale.ROOT);
+        if (normalized.isBlank() || "chat".equals(normalized) || "status".equals(normalized)) {
+            return;
+        }
+        boolean replaced = TaskManager.INSTANCE.replaceForNewUserIntent(bot, "new_primary_intent:" + normalized);
+        if (replaced) {
+            io.github.zoyluo.aibot.goal.GoalExecutor.INSTANCE.clearUserGoal(bot);
+            awaitingTask.remove(bot.getUuid());
+            nextGoalWakeTick.remove(bot.getUuid());
+            bot.getActionPack().stopAll();
+            BotLog.task(bot, "primary_intent_replaced_previous_work", "intent", normalized);
+        }
     }
 
     private void onResponse(AIPlayerEntity bot, DecisionLease lease, ChatResponse response) {

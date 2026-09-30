@@ -7,7 +7,7 @@ import java.util.Optional;
 import net.minecraft.server.network.ServerPlayerEntity;
 
 public final class FollowTask extends AbstractTask {
-    private static final double STOP_DISTANCE = 3.0D;
+    private static final double COMPLETE_DISTANCE = 4.0D;
     private static final double START_DISTANCE = 4.5D;
     private static final int REPATH_TICKS = 40;
 
@@ -57,9 +57,10 @@ public final class FollowTask extends AbstractTask {
             return;
         }
         double distance = bot.distanceTo(target);
-        if (distance <= STOP_DISTANCE) {
+        if (distance <= COMPLETE_DISTANCE) {
             bot.getActionPack().stopMovement();
-            waiting = true;
+            waiting = false;
+            complete();
             return;
         }
         waiting = false;

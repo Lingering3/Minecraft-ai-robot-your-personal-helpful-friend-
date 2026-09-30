@@ -193,6 +193,19 @@ public final class TaskManager {
         return representative != null || hadFailure || hadPendingFailure;
     }
 
+    /**
+     * A new explicit player activity replaces previous user work. This is different from a
+     * temporary pause: the old work must not resume later after the new activity starts.
+     */
+    public boolean replaceForNewUserIntent(AIPlayerEntity bot, String reason) {
+        TaskOrigin origin = activeOrigins.get(bot.getUuid());
+        if (origin != null && origin.safety()) {
+            BotLog.task(bot, "task_replace_deferred_for_safety", "reason", reason);
+            return false;
+        }
+        return cancelIntentTasks(bot, reason);
+    }
+
     public Optional<Task> getActive(AIPlayerEntity bot) {
         return Optional.ofNullable(active.get(bot.getUuid()));
     }

@@ -34,15 +34,11 @@ public final class BotRuntimeOptions {
     }
 
     public boolean analysisEnabled(AIPlayerEntity bot) {
-        return analysis.getOrDefault(bot.getUuid(), false);
+        return analysis.getOrDefault(bot.getUuid(), true);
     }
 
     public void setAnalysisEnabled(AIPlayerEntity bot, boolean enabled) {
-        if (enabled) {
-            analysis.put(bot.getUuid(), true);
-        } else {
-            analysis.remove(bot.getUuid());
-        }
+        analysis.put(bot.getUuid(), enabled);
     }
 
     public void clear(AIPlayerEntity bot) {

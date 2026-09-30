@@ -71,14 +71,23 @@ public final class LitematicaImporter {
         return ids.keySet().stream().sorted().toList();
     }
 
+    public static boolean existsLocal(String id) {
+        if (id == null || id.isBlank()) {
+            return false;
+        }
+        Path path = structuresDir().resolve(id + ".litematic");
+        return Files.exists(path);
+    }
+
     public static boolean exists(String id) {
         if (id == null || id.isBlank()) {
             return false;
         }
-        return findLitematic(id).isPresent();
+        return findLitematic(id).isPresent() || RemoteBlueprints.has(id);
     }
 
     public static BlueprintSchema load(String id) throws IOException {
+        RemoteBlueprints.downloadIfNeeded(id);
         Path path = findLitematic(id).orElse(null);
         if (path == null) {
             throw new IOException("litematic_not_found: " + id);

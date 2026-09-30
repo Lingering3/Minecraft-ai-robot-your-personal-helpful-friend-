@@ -182,6 +182,9 @@ public final class BlueprintRecommender {
     }
 
     private static String sizeOf(String id) {
+        if (RemoteBlueprints.has(id) && !LitematicaImporter.existsLocal(id)) {
+            return RemoteBlueprints.sizeText(id);
+        }
         try {
             BlueprintSchema schema = BlueprintLoader.load(id);
             return schema.width() + "x" + schema.height() + "x" + schema.depth();
