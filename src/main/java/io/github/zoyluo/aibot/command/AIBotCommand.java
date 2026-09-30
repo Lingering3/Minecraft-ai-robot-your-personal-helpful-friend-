@@ -1,6 +1,7 @@
 package io.github.zoyluo.aibot.command;
 
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import io.github.zoyluo.aibot.auth.BotAuthorizationGate;
@@ -47,9 +48,19 @@ public final class AIBotCommand {
                                                 StringArgumentType.getString(context, "trigger"))))))
                 .then(literal("buildrate")
                         .executes(context -> buildRateStatus(context.getSource()))
-                        .then(argument("blocks_per_tick", IntegerArgumentType.integer(1, 256))
+                        .then(argument("blocks_per_tick", IntegerArgumentType.integer(1, 1024))
                                 .executes(context -> buildRate(context.getSource(),
                                         IntegerArgumentType.getInteger(context, "blocks_per_tick")))))
+                .then(literal("buildfoundation")
+                        .executes(context -> buildFoundationStatus(context.getSource()))
+                        .then(literal("fill")
+                                .then(argument("enabled", BoolArgumentType.bool())
+                                        .executes(context -> buildFoundationFill(context.getSource(),
+                                                BoolArgumentType.getBool(context, "enabled")))))
+                        .then(literal("air")
+                                .then(argument("enabled", BoolArgumentType.bool())
+                                        .executes(context -> buildFoundationAir(context.getSource(),
+                                                BoolArgumentType.getBool(context, "enabled"))))))
                 .then(literal("despawn")
                         .then(argument("name", StringArgumentType.word())
                                 .executes(context -> despawn(context.getSource(), StringArgumentType.getString(context, "name")))))
@@ -149,6 +160,34 @@ public final class AIBotCommand {
         source.sendFeedback(() -> Text.literal("[AIBot] local pseudo build rate="
                 + BuildTask.pseudoPlaceBlocksPerTick() + " blocks/tick"), false);
         return 1;
+    }
+
+    private static int buildFoundationFill(ServerCommandSource source, boolean enabled) {
+        if (!BotAuthorizationGate.INSTANCE.requireGlobalAdmin(source, "command:buildfoundation")) {
+            return 0;
+        }
+        BuildTask.setFlattenFillEnabled(enabled);
+        return buildFoundationStatus(source);
+    }
+
+    private static int buildFoundationAir(ServerCommandSource source, boolean enabled) {
+        if (!BotAuthorizationGate.INSTANCE.requireGlobalAdmin(source, "command:buildfoundation")) {
+            return 0;
+        }
+        BuildTask.setFlattenAirClearEnabled(enabled);
+        return buildFoundationStatus(source);
+    }
+
+    private static int buildFoundationStatus(ServerCommandSource source) {
+        source.sendFeedback(() -> Text.literal("[AIBot] build foundation fill="
+                + onOff(BuildTask.flattenFillEnabled())
+                + " air=" + onOff(BuildTask.flattenAirClearEnabled())
+                + " (fill=补地基, air=清空建筑空间/空气地基)"), false);
+        return 1;
+    }
+
+    private static String onOff(boolean enabled) {
+        return enabled ? "on" : "off";
     }
 
     private static int despawn(ServerCommandSource source, String name) {

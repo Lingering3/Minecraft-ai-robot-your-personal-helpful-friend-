@@ -24,6 +24,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -40,6 +41,7 @@ public final class DangerWatcher {
     private final Map<UUID, Integer> nextEscapeHelpTick = new ConcurrentHashMap<>();  // 撤离求助节流
     private final Map<UUID, Integer> nextShelterAttemptTick = new ConcurrentHashMap<>();
     private final Map<UUID, ShelterEpisode> shelterEpisodes = new ConcurrentHashMap<>();
+    private final Set<UUID> deathRecoveryInFlight = ConcurrentHashMap.newKeySet();
 
     // 第1层 困死退避:逃避类任务(evade/shelter)在同一格反复触发却没脱身,即判"被困",
     // 退避一段时间不再空派、并按间隔节流求助。终结"夜间困坑底每 2 秒 shelter/evade 死循环刷屏"。
@@ -71,6 +73,7 @@ public final class DangerWatcher {
         nextEscapeHelpTick.remove(id);
         nextShelterAttemptTick.remove(id);
         shelterEpisodes.remove(id);
+        deathRecoveryInFlight.remove(id);
     }
 
     public void clearAll() {
@@ -85,6 +88,7 @@ public final class DangerWatcher {
         nextEscapeHelpTick.clear();
         nextShelterAttemptTick.clear();
         shelterEpisodes.clear();
+        deathRecoveryInFlight.clear();
     }
 
     private record TrapRecord(BlockPos pos, int repeatCount, int lastHelpTick) {
@@ -135,6 +139,7 @@ public final class DangerWatcher {
         if (bot.getHealth() <= 0.0F || !bot.isAlive()) {
             BlockPos deathPos = bot.getBlockPos();
             long deathTick = server.getTicks();
+            boolean diedDuringRecovery = deathRecoveryInFlight.contains(bot.getUuid());
             int visibleHostilesAtDeath = bot.getServerWorld()
                     .getEntitiesByClass(LivingEntity.class, bot.getBoundingBox().expand(8.0D),
                             entity -> entity instanceof HostileEntity && entity.isAlive())
@@ -150,7 +155,15 @@ public final class DangerWatcher {
                     .isDanger(bot.getUuid(), deathPos);
             DropRecoveryDecision recovery = dropRecoveryDecision(
                     bot.getBlockPos(), deathPos, visibleHostilesAtDeath, dangerous);
-            if (recovery.allowed()) {
+            if (diedDuringRecovery) {
+                deathRecoveryInFlight.remove(bot.getUuid());
+                BotLog.danger(bot, "drop_recovery_abandoned_after_redeath",
+                        "death", deathPos.toShortString(),
+                        "respawn", bot.getBlockPos().toShortString());
+                BrainCoordinator.INSTANCE.sendPanelChat(bot, "system",
+                        bot.getGameProfile().getName() + " 跑尸途中再次死亡,已复活并放弃本次 recover,准备恢复中断任务。");
+            } else if (recovery.allowed()) {
+                deathRecoveryInFlight.add(bot.getUuid());
                 TaskManager.INSTANCE.assign(bot, new RecoverDropsTask(deathPos, deathTick), TaskOrigin.safety("recover_drops"));
                 BrainCoordinator.INSTANCE.sendPanelChat(bot, "system",
                         bot.getGameProfile().getName() + " 死亡后已复活,正赶回 "
@@ -167,6 +180,7 @@ public final class DangerWatcher {
             }
             return true;
         }
+        refreshDeathRecoveryMarker(bot);
         Optional<Threat> threat = collectTopThreat(bot);
         Optional<Task> active = TaskManager.INSTANCE.getActive(bot);
         refreshShelterEpisode(bot);
@@ -454,6 +468,22 @@ public final class DangerWatcher {
             return true;
         }
         return false;
+    }
+
+    private void refreshDeathRecoveryMarker(AIPlayerEntity bot) {
+        UUID id = bot.getUuid();
+        if (!deathRecoveryInFlight.contains(id)) {
+            return;
+        }
+        boolean activeRecover = TaskManager.INSTANCE.getActive(bot)
+                .map(RecoverDropsTask.class::isInstance)
+                .orElse(false);
+        boolean pausedRecover = TaskManager.INSTANCE.peekPaused(bot)
+                .map(RecoverDropsTask.class::isInstance)
+                .orElse(false);
+        if (!activeRecover && !pausedRecover) {
+            deathRecoveryInFlight.remove(id);
+        }
     }
 
     static boolean canResumePausedWork(AIPlayerEntity bot, Optional<Threat> threat) {

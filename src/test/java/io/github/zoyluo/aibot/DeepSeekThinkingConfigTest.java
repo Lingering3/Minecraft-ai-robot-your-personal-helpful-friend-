@@ -18,11 +18,12 @@ class DeepSeekThinkingConfigTest {
     }
 
     @Test
-    void defaultsTargetTheCurrentFlashModelWithABudgetReasoningCanNotStarve() {
+    void defaultsTargetTheStepFunFlashModelWithoutDeepSeekThinkingPayload() {
         AIBotConfig.DeepSeek defaults = AIBotConfig.defaults().deepseek();
 
-        assertEquals("deepseek-v4-flash", defaults.model());
-        assertEquals(Boolean.TRUE, defaults.thinking());
+        assertEquals("https://api.stepfun.com/v1", defaults.baseUrl());
+        assertEquals("step-3.5-flash", defaults.model());
+        assertEquals(Boolean.FALSE, defaults.thinking());
         assertEquals("low", defaults.reasoningEffort());
         assertTrue(defaults.maxTokens() >= 8192,
                 "reasoning shares max_tokens; 2048 truncates tool calls");

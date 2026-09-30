@@ -50,9 +50,6 @@ public final class IdleCoordinator {
         if (TaskManager.INSTANCE.getActive(bot).isPresent()) {
             return false;
         }
-        if (TaskManager.INSTANCE.hasPaused(bot)) {
-            return false;
-        }
         // GOALFIX-GF1 P0-A:bot 有活跃目标计划时,空闲分配让位给 GoalExecutor(防步骤间隙抢任务板作业)。
         if (io.github.zoyluo.aibot.goal.GoalExecutor.INSTANCE.hasActivePlan(bot)) {
             return false;
@@ -61,6 +58,10 @@ public final class IdleCoordinator {
         // bot until ActionPack settles. Do not wake Brain, resume paused work, or claim a Job over it.
         if (bot.getActionPack().hasActiveActions()) {
             return false;
+        }
+        if (TaskManager.INSTANCE.hasPaused(bot)) {
+            TaskManager.INSTANCE.resumeFromPause(bot);
+            return true;
         }
         UUID currentJob = claimedJobs.remove(bot.getUuid());
         if (currentJob != null) {

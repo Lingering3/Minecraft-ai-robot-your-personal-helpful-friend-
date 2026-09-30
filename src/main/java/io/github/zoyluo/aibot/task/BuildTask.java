@@ -72,6 +72,10 @@ public final class BuildTask extends AbstractTask {
     private String note = "";
     private static volatile int pseudoPlaceBlocksPerTick = Math.max(1,
             Integer.getInteger("aibot.pseudoPlaceRate", 8));
+    private static volatile boolean flattenFillEnabled = Boolean.parseBoolean(
+            System.getProperty("aibot.buildFoundationFill", "true"));
+    private static volatile boolean flattenAirClearEnabled = Boolean.parseBoolean(
+            System.getProperty("aibot.buildFoundationAir", "true"));
     private static final int BASE_TIMEOUT_TICKS = 16000;
     private static final int PSEUDO_TIMEOUT_PADDING_TICKS = 1200;
     private static final int REAL_TIMEOUT_PER_BLOCK_TICKS = 120;
@@ -225,16 +229,19 @@ public final class BuildTask extends AbstractTask {
         for (int dx = 0; dx < blueprint.width(); dx++) {
             for (int dz = 0; dz < blueprint.depth(); dz++) {
                 BlockPos ground = anchor.add(dx, -1, dz);
-                if (!rawTerrainRead
+                if (flattenFillEnabled
+                        && (!rawTerrainRead
                         || world.getBlockState(ground).isAir()
-                        || !world.getFluidState(ground).isEmpty()) {
+                        || !world.getFluidState(ground).isEmpty())) {
                     flattenTargets.addLast(new FlattenTarget(ground, FlattenKind.FILL));
                 }
-                for (int dy = 0; dy < Math.max(blueprint.height(), 1); dy++) {
-                    BlockPos clear = anchor.add(dx, dy, dz);
-                    if (!rawTerrainRead
-                            || (!world.getBlockState(clear).isAir() && world.getFluidState(clear).isEmpty())) {
-                        flattenTargets.addLast(new FlattenTarget(clear, FlattenKind.CLEAR));
+                if (flattenAirClearEnabled) {
+                    for (int dy = 0; dy < Math.max(blueprint.height(), 1); dy++) {
+                        BlockPos clear = anchor.add(dx, dy, dz);
+                        if (!rawTerrainRead
+                                || (!world.getBlockState(clear).isAir() && world.getFluidState(clear).isEmpty())) {
+                            flattenTargets.addLast(new FlattenTarget(clear, FlattenKind.CLEAR));
+                        }
                     }
                 }
             }
@@ -911,7 +918,23 @@ public final class BuildTask extends AbstractTask {
     }
 
     public static void setPseudoPlaceBlocksPerTick(int blocksPerTick) {
-        pseudoPlaceBlocksPerTick = Math.max(1, Math.min(256, blocksPerTick));
+        pseudoPlaceBlocksPerTick = Math.max(1, Math.min(1024, blocksPerTick));
+    }
+
+    public static boolean flattenFillEnabled() {
+        return flattenFillEnabled;
+    }
+
+    public static void setFlattenFillEnabled(boolean enabled) {
+        flattenFillEnabled = enabled;
+    }
+
+    public static boolean flattenAirClearEnabled() {
+        return flattenAirClearEnabled;
+    }
+
+    public static void setFlattenAirClearEnabled(boolean enabled) {
+        flattenAirClearEnabled = enabled;
     }
 
     public void restoreAnchor(BlockPos restoredAnchor) {

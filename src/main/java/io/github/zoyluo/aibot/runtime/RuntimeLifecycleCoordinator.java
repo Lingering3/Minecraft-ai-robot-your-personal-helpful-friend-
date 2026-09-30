@@ -79,7 +79,13 @@ public final class RuntimeLifecycleCoordinator {
         // exact goal/task checkpoint while RecoverDropsTask owns the safety slot, then resumes it.
         GoalExecutor.INSTANCE.suspendForDeath(bot);
         IdleCoordinator.INSTANCE.cancelClaimedJob(bot, "bot_died");
-        TaskManager.INSTANCE.cancelIntentTasks(bot, "bot_died");
+        TaskManager.INSTANCE.activeOrigin(bot).ifPresentOrElse(origin -> {
+            if (origin.safety()) {
+                TaskManager.INSTANCE.abort(bot);
+            } else {
+                TaskManager.INSTANCE.pauseFor(bot, "bot_died");
+            }
+        }, () -> TaskManager.INSTANCE.pauseFor(bot, "bot_died"));
         bot.getActionPack().stopAll();
         BrainCoordinator.INSTANCE.reset(bot);
         clearTransient(bot);
