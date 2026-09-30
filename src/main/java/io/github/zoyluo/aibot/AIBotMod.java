@@ -54,6 +54,7 @@ public class AIBotMod implements ModInitializer {
 
         // 释放内置蓝图到 blueprints/structures/(首次启动,不覆盖)
         io.github.zoyluo.aibot.blueprint.BuiltinBlueprints.extractIfMissing();
+        io.github.zoyluo.aibot.blueprint.BlueprintCatalog.refreshDisplayIndex();
 
         BrainCoordinator.INSTANCE.configure(config);
         io.github.zoyluo.aibot.item.BlueprintItems.register();

@@ -449,6 +449,15 @@ public final class BuildTask extends AbstractTask {
                 bot.getActionPack().stopAll();
                 int required = report.expected() - report.unsupported();
                 if (report.mismatched() > 0 || report.matched() != required) {
+                    if (isCreative(bot)) {
+                        BotLog.action(bot, "creative_pseudo_build_finished_incomplete",
+                                "matched", report.matched(),
+                                "required", required,
+                                "skipped", report.skipped(),
+                                "unsupported", report.unsupported());
+                        complete();
+                        return;
+                    }
                     fail("structure_incomplete: matched=" + report.matched()
                             + "/" + required
                             + " skipped=" + report.skipped()
@@ -918,7 +927,7 @@ public final class BuildTask extends AbstractTask {
     }
 
     public static void setPseudoPlaceBlocksPerTick(int blocksPerTick) {
-        pseudoPlaceBlocksPerTick = Math.max(1, Math.min(1024, blocksPerTick));
+        pseudoPlaceBlocksPerTick = Math.max(1, Math.min(4096, blocksPerTick));
     }
 
     public static boolean flattenFillEnabled() {

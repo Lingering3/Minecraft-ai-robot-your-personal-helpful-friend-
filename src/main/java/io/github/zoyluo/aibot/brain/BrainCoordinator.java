@@ -18,6 +18,7 @@ import io.github.zoyluo.aibot.observe.TpsGuard;
 import io.github.zoyluo.aibot.network.AIBotServerNetworking;
 import io.github.zoyluo.aibot.perception.PerceptionCollector;
 import io.github.zoyluo.aibot.perception.PerceptionSnapshot;
+import io.github.zoyluo.aibot.runtime.IntentController;
 import io.github.zoyluo.aibot.runtime.TaskOrigin;
 import io.github.zoyluo.aibot.task.BlueprintLoader;
 import io.github.zoyluo.aibot.task.BlueprintSchema;
@@ -279,12 +280,22 @@ public final class BrainCoordinator {
     }
 
     private boolean handleFastControl(AIPlayerEntity bot, String text) {
-        String normalized = text == null ? "" : text.trim().toLowerCase(Locale.ROOT);
+        String normalized = text == null ? "" : text.trim().toLowerCase(Locale.ROOT)
+                .replaceAll("[。.!！?？]+$", "");
         if (normalized.equals("stop") || normalized.equals("停止")) {
             boolean changed = TaskManager.INSTANCE.pauseUserIntent(bot, "chat_stop");
             io.github.zoyluo.aibot.goal.GoalExecutor.INSTANCE.clearUserGoal(bot);
             bot.getActionPack().stopAll();
             sendPanelChat(bot, "bot", changed ? "已停止当前任务，进度已暂存。说 start 或 开始 可以继续。" : "我现在没有正在执行的任务。");
+            return true;
+        }
+        if (normalized.equals("end") || normalized.equals("cancel") || normalized.equals("终止")
+                || normalized.equals("结束") || normalized.equals("取消")) {
+            var outcome = IntentController.INSTANCE.cancelAll(
+                    bot, IntentController.ControlOrigin.SYSTEM, "chat_terminate");
+            sendPanelChat(bot, "bot", outcome.changed()
+                    ? "已终止当前任务和排队目标，不会自动继续。"
+                    : "我现在没有正在执行的任务。");
             return true;
         }
         if (normalized.equals("start") || normalized.equals("开始") || normalized.equals("继续")) {

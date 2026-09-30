@@ -6,7 +6,6 @@ import net.fabricmc.loader.api.FabricLoader;
 
 import java.io.IOException;
 import java.io.Reader;
-import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -31,10 +30,6 @@ public final class BlueprintLoader {
                 throw new IOException("blueprint_bad_custom_spec: " + name + " (expect custom:WxDxH:material)");
             }
             return expand(custom);
-        }
-        if ("hut_5x5".equals(name) || "small_hut".equals(name)
-                || "glass_cabin".equals(name) || "watch_tower".equals(name) || "simple_bridge".equals(name)) {
-            ensureDefaultBlueprintsWritten();
         }
         Path path = blueprintDir().resolve(name + ".json");
         if (!Files.exists(path)) {
@@ -143,24 +138,6 @@ public final class BlueprintLoader {
             case "glass" -> "minecraft:glass";
             default -> "minecraft:air";
         };
-    }
-
-    private static void ensureDefaultBlueprintsWritten() throws IOException {
-        writeIfMissing("hut_5x5.json", BlueprintSchema.hut5x5());
-        writeIfMissing("small_hut.json", BlueprintSchema.smallHutOps());
-        writeIfMissing("glass_cabin.json", BlueprintSchema.glassCabin());
-        writeIfMissing("watch_tower.json", BlueprintSchema.watchTower());
-        writeIfMissing("simple_bridge.json", BlueprintSchema.simpleBridge());
-    }
-
-    private static void writeIfMissing(String fileName, BlueprintSchema schema) throws IOException {
-        Path path = blueprintDir().resolve(fileName);
-        if (!Files.exists(path)) {
-            Files.createDirectories(path.getParent());
-            try (Writer writer = Files.newBufferedWriter(path)) {
-                GSON.toJson(schema, writer);
-            }
-        }
     }
 
     private static Path blueprintDir() {

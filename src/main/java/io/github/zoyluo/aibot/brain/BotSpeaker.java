@@ -16,10 +16,10 @@ public final class BotSpeaker {
             return;
         }
         Text line = Text.literal("<" + bot.getGameProfile().getName() + "> " + cleaned);
-        bot.getServer().getPlayerManager().getPlayerList().forEach(player -> {
+        bot.getServer().execute(() -> bot.getServer().getPlayerManager().getPlayerList().forEach(player -> {
             if (!(player instanceof AIPlayerEntity)) {
                 player.sendMessage(line, false);
             }
-        });
+        }));
     }
 }

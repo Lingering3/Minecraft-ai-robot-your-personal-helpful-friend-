@@ -1,6 +1,8 @@
 package io.github.zoyluo.aibot.blueprint;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -11,17 +13,14 @@ import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
 public final class BlueprintCatalog {
-    private static final Gson GSON = new Gson();
-    private static final BlueprintEntry SMALL_HUT = new BlueprintEntry(
-            "small_hut",
-            "Small Hut",
-            List.of("house", "hut", "shelter", "base", "wood", "small", "房子", "小屋", "家", "庇护所"));
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Map<String, String> NAME_TRANSLATIONS = nameTranslations();
 
     private BlueprintCatalog() {
@@ -29,26 +28,8 @@ public final class BlueprintCatalog {
 
     public static List<BlueprintEntry> entries() {
         List<BlueprintEntry> entries = new ArrayList<>();
-        entries.add(SMALL_HUT);
-        entries.add(new BlueprintEntry(
-                "hut_5x5",
-                "5x5 Hut",
-                List.of("house", "hut", "shelter", "base", "stone", "small", "房子", "小屋", "石头")));
-        entries.add(new BlueprintEntry(
-                "glass_cabin",
-                "Glass Cabin",
-                List.of("house", "cabin", "glass", "modern", "base", "房子", "玻璃", "现代", "小屋")));
-        entries.add(new BlueprintEntry(
-                "watch_tower",
-                "Watch Tower",
-                List.of("tower", "watchtower", "guard", "哨塔", "塔", "高塔", "瞭望塔")));
-        entries.add(new BlueprintEntry(
-                "simple_bridge",
-                "Simple Bridge",
-                List.of("bridge", "river", "crossing", "桥", "桥梁", "过河")));
+        refreshDisplayIndexIfMissing();
         entries.addAll(indexEntries());
-        entries.addAll(jsonBlueprintEntries());
-        entries.addAll(structureEntries());
         entries.addAll(remoteEntries());
         return entries.stream()
                 .collect(java.util.stream.Collectors.toMap(
@@ -59,6 +40,33 @@ public final class BlueprintCatalog {
                 .values()
                 .stream()
                 .toList();
+    }
+
+    public static void refreshDisplayIndex() {
+        Path dir = blueprintDir();
+        try {
+            Files.createDirectories(dir);
+            JsonArray array = new JsonArray();
+            for (BlueprintEntry entry : structureEntries()) {
+                JsonObject object = new JsonObject();
+                object.addProperty("id", entry.id());
+                object.addProperty("name", entry.name());
+                JsonArray tags = new JsonArray();
+                for (String tag : entry.tags()) {
+                    tags.add(tag);
+                }
+                object.add("tags", tags);
+                array.add(object);
+            }
+            Files.writeString(dir.resolve("index.json"), GSON.toJson(array));
+        } catch (IOException | RuntimeException ignored) {
+        }
+    }
+
+    private static void refreshDisplayIndexIfMissing() {
+        if (!Files.exists(blueprintDir().resolve("index.json"))) {
+            refreshDisplayIndex();
+        }
     }
 
     private static List<BlueprintEntry> indexEntries() {
@@ -101,23 +109,6 @@ public final class BlueprintCatalog {
         }
     }
 
-    private static List<BlueprintEntry> jsonBlueprintEntries() {
-        Path dir = blueprintDir();
-        if (!Files.isDirectory(dir)) {
-            return List.of();
-        }
-        try (var stream = Files.list(dir)) {
-            return stream
-                    .filter(path -> path.getFileName().toString().endsWith(".json"))
-                    .filter(path -> !"index.json".equals(path.getFileName().toString()))
-                    .map(path -> path.getFileName().toString().replaceFirst("\\.json$", ""))
-                    .map(id -> new BlueprintEntry(id, id, List.of(id)))
-                    .toList();
-        } catch (IOException ignored) {
-            return List.of();
-        }
-    }
-
     private static List<BlueprintEntry> structureEntries() {
         List<BlueprintEntry> entries = new ArrayList<>();
         for (String id : StructureImporter.listStructures()) {
@@ -132,7 +123,9 @@ public final class BlueprintCatalog {
                 entries.add(new BlueprintEntry(id, id, List.of(id)));
             }
         }
-        return entries;
+        return entries.stream()
+                .sorted(Comparator.comparing(BlueprintEntry::id))
+                .toList();
     }
 
     private static List<BlueprintEntry> remoteEntries() {

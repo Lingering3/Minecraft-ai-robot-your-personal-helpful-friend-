@@ -162,11 +162,11 @@ public final class AIBotBlueprintSubcommand {
             return 0;
         }
         RemoteBlueprints.clearCache();
+        BlueprintCatalog.refreshDisplayIndex();
         int structures = StructureImporter.listStructures().size();
         int litematics = LitematicaImporter.listLitematics().size();
         int remote = AIBotConfig.get().remoteBlueprints().isEnabled() ? RemoteBlueprints.entries().size() : 0;
-        source.sendFeedback(() -> Text.literal("[AIBot] 已重新扫描蓝图库: 内置 json=" + 5
-                + " + blueprints/*.json + blueprints/structures/*.nbt=" + structures
+        source.sendFeedback(() -> Text.literal("[AIBot] 已重新扫描蓝图库并刷新 blueprints/index.json: blueprints/structures/*.nbt=" + structures
                 + " + blueprints/structures/*.litematic=" + litematics
                 + " + 远程清单=" + remote
                 + " (远程蓝图选中后会下载到 游戏目录/blueprints/structures/ 再按 Litematic 加载)"), true);

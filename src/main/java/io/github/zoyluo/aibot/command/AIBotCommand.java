@@ -48,7 +48,7 @@ public final class AIBotCommand {
                                                 StringArgumentType.getString(context, "trigger"))))))
                 .then(literal("buildrate")
                         .executes(context -> buildRateStatus(context.getSource()))
-                        .then(argument("blocks_per_tick", IntegerArgumentType.integer(1, 1024))
+                        .then(argument("blocks_per_tick", IntegerArgumentType.integer(1, 4096))
                                 .executes(context -> buildRate(context.getSource(),
                                         IntegerArgumentType.getInteger(context, "blocks_per_tick")))))
                 .then(literal("buildfoundation")
