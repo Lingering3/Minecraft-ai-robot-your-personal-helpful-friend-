@@ -49,6 +49,7 @@ public final class BrainCoordinator {
     private final Map<UUID, BotConversation> conversations = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> manualModes = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> nextGoalWakeTick = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> latestMessageSequences = new ConcurrentHashMap<>();
     // FLOW-2:大脑分配长任务后置 true;任务结束后 idle-watcher 据此自动唤醒大脑决定下一步(无需人催)。
     private final Map<UUID, Boolean> awaitingTask = new ConcurrentHashMap<>();
     private ToolRegistry toolRegistry = new ToolRegistry();
@@ -70,14 +71,21 @@ public final class BrainCoordinator {
 
     public boolean handleMessage(AIPlayerEntity bot, String senderName, String text) {
         ensureConfigured();
+        long messageSequence = beginMessage(bot);
         if (handleFastControl(bot, text)) {
             return true;
         }
         if (creativeContext(bot)) {
-            return handleCreativeMessage(bot, senderName, text);
+            return handleCreativeMessage(bot, senderName, text, messageSequence);
         }
         StepFunIntentClient.INSTANCE.classify(text).whenComplete((intent, throwable) ->
                 bot.getServer().execute(() -> {
+                    if (!isLatestMessage(bot, messageSequence)) {
+                        BotLog.comm(bot, "stale_intent_dropped",
+                                "sequence", messageSequence,
+                                "latest", latestMessageSequences.getOrDefault(bot.getUuid(), 0L));
+                        return;
+                    }
                     if (throwable != null || intent == null || intent.isEmpty()) {
                         BotLog.comm(bot, "stepfun_intent_rejected");
                         sendPanelChat(bot, "system", "任务识别失败，请换个更明确的说法。");
@@ -86,7 +94,7 @@ public final class BrainCoordinator {
                     StepFunIntent recognized = intent.orElseThrow();
                     emitAnalysis(bot, recognized);
                     if (recognized.isChat()) {
-                        handleParallelChat(bot, senderName, text, recognized);
+                        handleParallelChat(bot, senderName, text, recognized, messageSequence);
                         return;
                     }
                     if ("status".equals(recognized.intent())) {
@@ -108,9 +116,15 @@ public final class BrainCoordinator {
      * 其他任务型 → 继续走正常任务链路,让“过来/挖矿/搜集”等命令在创造模式也能响应。
      * StepFun 识别失败时不执行任务。
      */
-    private boolean handleCreativeMessage(AIPlayerEntity bot, String senderName, String text) {
+    private boolean handleCreativeMessage(AIPlayerEntity bot, String senderName, String text, long messageSequence) {
         StepFunIntentClient.INSTANCE.classify(text).whenComplete((intent, throwable) ->
                 bot.getServer().execute(() -> {
+                    if (!isLatestMessage(bot, messageSequence)) {
+                        BotLog.comm(bot, "stale_intent_dropped_creative",
+                                "sequence", messageSequence,
+                                "latest", latestMessageSequences.getOrDefault(bot.getUuid(), 0L));
+                        return;
+                    }
                     if (throwable != null || intent == null || intent.isEmpty()) {
                         BotLog.comm(bot, "stepfun_intent_rejected_creative");
                         sendPanelChat(bot, "system", "任务识别失败，请换个更明确的说法。");
@@ -119,7 +133,7 @@ public final class BrainCoordinator {
                     StepFunIntent recognized = intent.orElseThrow();
                     emitAnalysis(bot, recognized);
                     if (recognized.isChat()) {
-                        handleParallelChat(bot, senderName, text, recognized);
+                        handleParallelChat(bot, senderName, text, recognized, messageSequence);
                         return;
                     }
                     if ("status".equals(recognized.intent())) {
@@ -292,11 +306,14 @@ public final class BrainCoordinator {
         }
         String action = intent.actionSummary() == null || intent.actionSummary().isBlank()
                 ? "等待后续决策" : intent.actionSummary();
-        sendPanelChat(bot, "system", "分析: StepFun 初步判断为 " + intent.intent()
-                + "，bot 将" + action + "。");
+        String text = "分析: StepFun 初步判断为 " + intent.intent()
+                + "，bot 将" + action + "。";
+        sendPanelChat(bot, "system", text);
+        BotSpeaker.say(bot, text);
     }
 
-    private boolean handleParallelChat(AIPlayerEntity bot, String senderName, String text, StepFunIntent intent) {
+    private boolean handleParallelChat(AIPlayerEntity bot, String senderName, String text, StepFunIntent intent,
+                                       long messageSequence) {
         ensureConfigured();
         DecisionLease lease = new DecisionLease(bot.getUuid(), UUID.randomUUID(), 1L, 1L);
         List<ChatMessage> history = List.of(
@@ -311,6 +328,12 @@ public final class BrainCoordinator {
                     history,
                     List.of(),
                     (responseLease, response) -> {
+                        if (!isLatestMessage(bot, messageSequence)) {
+                            BotLog.comm(bot, "stale_parallel_chat_dropped",
+                                    "sequence", messageSequence,
+                                    "latest", latestMessageSequences.getOrDefault(bot.getUuid(), 0L));
+                            return;
+                        }
                         String cleanedContent = FunctionTagSanitizer.clean(response.content());
                         if (!cleanedContent.isBlank()) {
                             sendPanelChat(bot, "bot", cleanedContent);
@@ -328,6 +351,14 @@ public final class BrainCoordinator {
             sendPanelChat(bot, "system", "对话请求未能提交: " + message);
         }
         return true;
+    }
+
+    private long beginMessage(AIPlayerEntity bot) {
+        return latestMessageSequences.merge(bot.getUuid(), 1L, Long::sum);
+    }
+
+    private boolean isLatestMessage(AIPlayerEntity bot, long sequence) {
+        return latestMessageSequences.getOrDefault(bot.getUuid(), 0L) == sequence;
     }
 
     private static String statusText(AIPlayerEntity bot) {
@@ -549,6 +580,7 @@ public final class BrainCoordinator {
         manualModes.remove(bot.getUuid());
         awaitingTask.remove(bot.getUuid());
         nextGoalWakeTick.remove(bot.getUuid());
+        latestMessageSequences.remove(bot.getUuid());
         BotRuntimeOptions.INSTANCE.clear(bot);
         BotLog.comm(bot, "conversation_reset");
     }
@@ -652,6 +684,7 @@ public final class BrainCoordinator {
         manualModes.clear();
         nextGoalWakeTick.clear();
         awaitingTask.clear();
+        latestMessageSequences.clear();
     }
 
     public BrainStatus status(AIPlayerEntity bot) {
